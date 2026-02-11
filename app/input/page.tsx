@@ -30,10 +30,9 @@ interface AttendanceRow {
 }
 
 // ── 드롭다운 옵션 ──────────────────────────────────────────
-const BRANCH_OPTIONS = ["홍대", "강남", "건대", "성수", "합정", "이태원", "신촌"];
+const BRANCH_OPTIONS = ["홍대", "한남", "7", "11", "20", "26", "27", "41", "10", "자율", "외근"];
 const NAME_OPTIONS = [
-    "진리", "다빈", "인아", "수빈", "하준", "서연", "지우",
-    "민준", "예린", "도현", "유나", "시우", "채원", "현우",
+    "인아", "진리", "현빈", "태정", "재민", "정헌", "문정", "연주", "다빈", "승헌", "태현", "재우",
 ];
 
 // ── 숫자(시간) 판별 헬퍼 ─────────────────────────────────────
@@ -351,6 +350,16 @@ export default function InputPage() {
         }
     };
 
+    // 초기화
+    const resetTable = () => {
+        if (rows.length === 0) return;
+        if (confirm("모든 데이터를 초기화하시겠습니까?")) {
+            setRows([]);
+            setRawText("");
+            showToast("success", "초기화되었습니다.");
+        }
+    };
+
     return (
         <div className="min-h-screen bg-zinc-950 text-zinc-100">
             {/* ─── 헤더 ─── */}
@@ -413,6 +422,14 @@ export default function InputPage() {
                             </span>
                         </div>
                         <div className="flex items-center gap-2">
+                            <button
+                                onClick={resetTable}
+                                disabled={rows.length === 0}
+                                className="flex items-center gap-1 px-2.5 py-1 text-[11px] text-zinc-400 border border-zinc-700 hover:border-red-500 hover:text-red-400 transition disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                                <Trash2 size={12} />
+                                초기화
+                            </button>
                             <button
                                 onClick={addEmptyRow}
                                 className="flex items-center gap-1 px-2.5 py-1 text-[11px] text-zinc-400 border border-zinc-700 hover:border-zinc-500 hover:text-zinc-200 transition"

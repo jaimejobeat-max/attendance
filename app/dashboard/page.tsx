@@ -283,7 +283,7 @@ function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
                 <span className="text-[10px] text-zinc-500">정렬</span>
                 <div className="flex gap-1">
                     {[
-                        { key: "date", label: "최신순" },
+                        { key: "date", label: "기본" },
                         { key: "late", label: "지각 순" },
                         { key: "overtime", label: "오버타임 순" },
                     ].map((opt) => (
