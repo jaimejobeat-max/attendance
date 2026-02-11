@@ -283,7 +283,7 @@ function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
                 <span className="text-[10px] text-zinc-500">정렬</span>
                 <div className="flex gap-1">
                     {[
-                        { key: "date", label: "날짜순" },
+                        { key: "date", label: "최신순" },
                         { key: "late", label: "지각 순" },
                         { key: "overtime", label: "오버타임 순" },
                     ].map((opt) => (
@@ -291,8 +291,8 @@ function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
                             key={opt.key}
                             onClick={() => setSort(opt.key as any)}
                             className={`px-2 py-0.5 text-[10px] rounded border ${sort === opt.key
-                                    ? "bg-zinc-800 border-zinc-700 text-zinc-200"
-                                    : "border-transparent text-zinc-500 hover:text-zinc-300"
+                                ? "bg-zinc-800 border-zinc-700 text-zinc-200"
+                                : "border-transparent text-zinc-500 hover:text-zinc-300"
                                 } transition`}
                         >
                             {opt.label}
@@ -306,7 +306,7 @@ function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
                 <table className="w-full text-xs">
                     <thead>
                         <tr className="border-b border-zinc-800/60 text-[10px] uppercase text-zinc-500">
-                            <th className="px-4 py-2 text-left font-medium">날짜</th>
+
                             <th className="px-4 py-2 text-left font-medium">이름</th>
                             <th className="px-4 py-2 text-left font-medium">지각</th>
                             <th className="px-4 py-2 text-left font-medium">오버타임</th>
@@ -315,7 +315,7 @@ function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
                     <tbody>
                         {sorted.map((row, i) => (
                             <tr key={i} className="border-b border-zinc-800/30 hover:bg-zinc-800/20 transition">
-                                <td className="px-4 py-2 text-zinc-400">{formatDateKR(row.날짜)}</td>
+
                                 <td className="px-4 py-2 text-zinc-200 font-medium">{row.이름}</td>
                                 <td className="px-4 py-2">
                                     {safeNum(row["지각(분)"]) > 0 ? (
