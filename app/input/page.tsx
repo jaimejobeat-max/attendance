@@ -253,10 +253,53 @@ export default function InputPage() {
         setRows((prev) => prev.map((r) => ({ ...r, 날짜: newDate })));
     };
 
+    // ── 시간 변환 헬퍼 (분 단위) ──────────────────────────────────
+    function timeToMinutes(timeStr: string): number | null {
+        if (!timeStr) return null;
+        // "10" -> 10:00, "10:30" -> 10:30
+        if (!/^\d{1,2}(:\d{2})?$/.test(timeStr)) return null;
+
+        let [h, m] = timeStr.split(":").map(Number);
+        if (isNaN(h)) return null;
+        if (m === undefined) m = 0;
+        return h * 60 + m;
+    }
+
     // 셀 수정
     const updateCell = (rowIdx: number, key: ColKey, value: string) => {
         setRows((prev) =>
-            prev.map((r, i) => (i === rowIdx ? { ...r, [key]: value } : r))
+            prev.map((r, i) => {
+                if (i !== rowIdx) return r;
+                const updated = { ...r, [key]: value };
+
+                // ── 지각 자동 계산: 실제출근 - 예정출근 ──
+                if (key === "예정출근" || key === "실제출근") {
+                    const sched = timeToMinutes(updated.예정출근);
+                    const actual = timeToMinutes(updated.실제출근);
+                    if (sched !== null && actual !== null) {
+                        const diff = actual - sched;
+                        updated["지각(분)"] = diff > 0 ? diff.toString() : "0";
+                    } else if (!updated.실제출근) {
+                        // 실제출근 값이 없으면 초기화
+                        updated["지각(분)"] = "";
+                    }
+                }
+
+                // ── 오버타임 자동 계산: 실제퇴근 - 예정퇴근 ──
+                if (key === "예정퇴근" || key === "실제퇴근") {
+                    const sched = timeToMinutes(updated.예정퇴근);
+                    const actual = timeToMinutes(updated.실제퇴근);
+                    if (sched !== null && actual !== null) {
+                        const diff = actual - sched;
+                        updated["오버타임(분)"] = diff > 0 ? diff.toString() : "0";
+                    } else if (!updated.실제퇴근) {
+                        // 실제퇴근 값이 없으면 초기화
+                        updated["오버타임(분)"] = "";
+                    }
+                }
+
+                return updated;
+            })
         );
     };
 
