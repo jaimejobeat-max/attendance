@@ -255,6 +255,91 @@ function WorkerTableByBranch({ rows }: { rows: AttendanceRow[] }) {
     );
 }
 
+// ── 주간 상세 기록 테이블 (정렬/필터 포함) ─────────────────────
+function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
+    const [sort, setSort] = useState<"date" | "late" | "overtime">("date");
+
+    const sorted = useMemo(() => {
+        return [...rows].sort((a, b) => {
+            if (sort === "late") return safeNum(b["지각(분)"]) - safeNum(a["지각(분)"]);
+            if (sort === "overtime") return safeNum(b["오버타임(분)"]) - safeNum(a["오버타임(분)"]);
+            // date desc
+            return new Date(b.날짜).getTime() - new Date(a.날짜).getTime();
+        });
+    }, [rows, sort]);
+
+    if (rows.length === 0) {
+        return (
+            <div className="border border-zinc-800 border-t-0 py-12 text-center">
+                <p className="text-xs text-zinc-600">데이터가 없습니다.</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="border border-zinc-800 border-t-0">
+            {/* 정렬 옵션 */}
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-800/60 bg-zinc-900/20">
+                <span className="text-[10px] text-zinc-500">정렬</span>
+                <div className="flex gap-1">
+                    {[
+                        { key: "date", label: "날짜순" },
+                        { key: "late", label: "지각 순" },
+                        { key: "overtime", label: "오버타임 순" },
+                    ].map((opt) => (
+                        <button
+                            key={opt.key}
+                            onClick={() => setSort(opt.key as any)}
+                            className={`px-2 py-0.5 text-[10px] rounded border ${sort === opt.key
+                                    ? "bg-zinc-800 border-zinc-700 text-zinc-200"
+                                    : "border-transparent text-zinc-500 hover:text-zinc-300"
+                                } transition`}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* 테이블 */}
+            <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                    <thead>
+                        <tr className="border-b border-zinc-800/60 text-[10px] uppercase text-zinc-500">
+                            <th className="px-4 py-2 text-left font-medium">날짜</th>
+                            <th className="px-4 py-2 text-left font-medium">이름</th>
+                            <th className="px-4 py-2 text-left font-medium">지각</th>
+                            <th className="px-4 py-2 text-left font-medium">오버타임</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {sorted.map((row, i) => (
+                            <tr key={i} className="border-b border-zinc-800/30 hover:bg-zinc-800/20 transition">
+                                <td className="px-4 py-2 text-zinc-400">{formatDateKR(row.날짜)}</td>
+                                <td className="px-4 py-2 text-zinc-200 font-medium">{row.이름}</td>
+                                <td className="px-4 py-2">
+                                    {safeNum(row["지각(분)"]) > 0 ? (
+                                        <span className="text-rose-400 font-bold">{row["지각(분)"]}분</span>
+                                    ) : (
+                                        <span className="text-zinc-700">-</span>
+                                    )}
+                                </td>
+                                <td className="px-4 py-2">
+                                    {safeNum(row["오버타임(분)"]) > 0 ? (
+                                        <span className="text-emerald-400 font-bold">{row["오버타임(분)"]}분</span>
+                                    ) : (
+                                        <span className="text-zinc-700">-</span>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
 // ── 사람별 상세 리스트 카드 (총합 없이 개인별만) ─────────────
 function DetailStatCard({
     icon: Icon,
@@ -381,18 +466,7 @@ export default function DashboardPage() {
         [monthRows]
     );
 
-    // ── 주간 요일별 그룹 (월~일 정렬) ────────────────────
-    const weeklyByDay = useMemo(() => {
-        const map = new Map<string, AttendanceRow[]>();
-        for (const row of weekRows) {
-            const key = row.날짜;
-            if (!map.has(key)) map.set(key, []);
-            map.get(key)!.push(row);
-        }
-        return Array.from(map.entries()).sort(
-            (a, b) => getDayOfWeekOrder(a[0]) - getDayOfWeekOrder(b[0])
-        );
-    }, [weekRows]);
+
 
     // ── 월간 일자별 그룹 ────────────────────────────────
     const monthlyByDate = useMemo(() => {
@@ -527,30 +601,7 @@ export default function DashboardPage() {
                                     </span>
                                 </div>
 
-                                {weeklyByDay.length === 0 ? (
-                                    <div className="border border-zinc-800 border-t-0 py-8 text-center">
-                                        <p className="text-xs text-zinc-600">
-                                            이번 주 등록된 데이터가 없습니다.
-                                        </p>
-                                    </div>
-                                ) : (
-                                    weeklyByDay.map(([dateStr, rows]) => (
-                                        <div
-                                            key={dateStr}
-                                            className="border border-zinc-800 border-t-0"
-                                        >
-                                            <div className="flex items-center justify-between border-b border-zinc-800/60 px-4 py-2 bg-zinc-950">
-                                                <span className="text-[11px] font-medium text-zinc-400">
-                                                    {formatDateKR(dateStr)}
-                                                </span>
-                                                <span className="text-[10px] text-zinc-700">
-                                                    {rows.length}명
-                                                </span>
-                                            </div>
-                                            <WorkerTable rows={rows} />
-                                        </div>
-                                    ))
-                                )}
+                                <WeeklyRecordTable rows={weekRows} />
                             </section>
                         </motion.div>
                     )}
