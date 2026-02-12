@@ -23,9 +23,9 @@ interface AttendanceRow {
     실제출근: string;
     예정퇴근: string;
     실제퇴근: string;
-    "지각(분)": string;
-    "오버타임(분)": string;
-    "총 근무 시간": string;
+    "지각": string;
+    "오버타임": string;
+    "총근무": string;
     비고: string;
     _rowNumber?: number;
 }
@@ -142,7 +142,7 @@ interface PersonStat {
 
 function getPerPersonStats(
     rows: AttendanceRow[],
-    field: "지각(분)" | "오버타임(분)" | "총 근무 시간"
+    field: "지각" | "오버타임" | "총근무"
 ): PersonStat[] {
     const map = new Map<string, number>();
     for (const row of rows) {
@@ -306,9 +306,9 @@ function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
 
     const sorted = useMemo(() => {
         return [...rows].sort((a, b) => {
-            if (sort === "late") return safeNum(b["지각(분)"]) - safeNum(a["지각(분)"]);
-            if (sort === "overtime") return safeNum(b["오버타임(분)"]) - safeNum(a["오버타임(분)"]);
-            if (sort === "work") return safeNum(b["총 근무 시간"]) - safeNum(a["총 근무 시간"]);
+            if (sort === "late") return safeNum(b["지각"]) - safeNum(a["지각"]);
+            if (sort === "overtime") return safeNum(b["오버타임"]) - safeNum(a["오버타임"]);
+            if (sort === "work") return safeNum(b["총근무"]) - safeNum(a["총근무"]);
             // date desc
             return new Date(b.날짜).getTime() - new Date(a.날짜).getTime();
         });
@@ -366,21 +366,19 @@ function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
 
                                 <td className="px-4 py-2 text-zinc-200 font-medium">{row.이름}</td>
                                 <td className="px-4 py-2">
-                                    {safeNum(row["지각(분)"]) > 0 ? (
-                                        <span className="text-rose-400 font-bold">{row["지각(분)"]}분</span>
-                                    ) : (
-                                        <span className="text-zinc-700">-</span>
-                                    )}
+                                    <span className={safeNum(row["지각"]) > 0 ? "text-rose-400 font-bold" : "text-zinc-500"}>
+                                        {row["지각"] || "-"}
+                                    </span>
                                 </td>
                                 <td className="px-4 py-2">
-                                    {safeNum(row["오버타임(분)"]) > 0 ? (
-                                        <span className="text-emerald-400 font-bold">{row["오버타임(분)"]}분</span>
-                                    ) : (
-                                        <span className="text-zinc-700">-</span>
-                                    )}
+                                    <span className={safeNum(row["오버타임"]) > 0 ? "text-emerald-400 font-bold" : "text-zinc-500"}>
+                                        {row["오버타임"] || "-"}
+                                    </span>
                                 </td>
                                 <td className="px-4 py-2">
-                                    <span className="text-zinc-400">{row["총 근무 시간"] ? `${row["총 근무 시간"]}분` : "-"}</span>
+                                    <span className="text-zinc-400">
+                                        {row["총근무"] || "-"}
+                                    </span>
                                 </td>
                             </tr>
                         ))}
@@ -478,29 +476,29 @@ export default function DashboardPage() {
 
     // ── 주간 통계 (사람별) ────────────────────────────────
     const weeklyLate = useMemo(
-        () => weekRows.reduce((s, r) => s + safeNum(r["지각(분)"]), 0),
+        () => weekRows.reduce((s, r) => s + safeNum(r["지각"]), 0),
         [weekRows]
     );
     const weeklyOvertime = useMemo(
-        () => weekRows.reduce((s, r) => s + safeNum(r["오버타임(분)"]), 0),
+        () => weekRows.reduce((s, r) => s + safeNum(r["오버타임"]), 0),
         [weekRows]
     );
     const weeklyLatePersons = useMemo(
-        () => getPerPersonStats(weekRows, "지각(분)"),
+        () => getPerPersonStats(weekRows, "지각"),
         [weekRows]
     );
     const weeklyOvertimePersons = useMemo(
-        () => getPerPersonStats(weekRows, "오버타임(분)"),
+        () => getPerPersonStats(weekRows, "오버타임"),
         [weekRows]
     );
 
     // ── 월간 통계 ────────────────────────────────────────
     const monthlyLate = useMemo(
-        () => monthRows.reduce((s, r) => s + safeNum(r["지각(분)"]), 0),
+        () => monthRows.reduce((s, r) => s + safeNum(r["지각"]), 0),
         [monthRows]
     );
     const monthlyOvertime = useMemo(
-        () => monthRows.reduce((s, r) => s + safeNum(r["오버타임(분)"]), 0),
+        () => monthRows.reduce((s, r) => s + safeNum(r["오버타임"]), 0),
         [monthRows]
     );
     const monthlyTotalShifts = monthRows.length;
@@ -509,15 +507,15 @@ export default function DashboardPage() {
         [monthRows]
     );
     const monthlyLatePersons = useMemo(
-        () => getPerPersonStats(monthRows, "지각(분)"),
+        () => getPerPersonStats(monthRows, "지각"),
         [monthRows]
     );
     const monthlyOvertimePersons = useMemo(
-        () => getPerPersonStats(monthRows, "오버타임(분)"),
+        () => getPerPersonStats(monthRows, "오버타임"),
         [monthRows]
     );
     const weeklyTotalWorkPersons = useMemo(
-        () => getPerPersonStats(weekRows, "총 근무 시간"),
+        () => getPerPersonStats(weekRows, "총근무"),
         [weekRows]
     );
 
