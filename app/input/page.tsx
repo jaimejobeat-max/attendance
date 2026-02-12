@@ -388,11 +388,23 @@ export default function InputPage() {
         if (rows.length === 0) return;
         setIsSending(true);
 
+        // 시트로 보낼 때는 계산된 필드(지각, 오버타임, 총근무)와 비고를 제외하고
+        // 날짜, 지점, 이름, 그리고 4가지 시간 정보만 보냄
+        const payload = rows.map((row) => ({
+            날짜: row.날짜,
+            지점: row.지점,
+            이름: row.이름,
+            예정출근: row.예정출근,
+            실제출근: row.실제출근,
+            예정퇴근: row.예정퇴근,
+            실제퇴근: row.실제퇴근,
+        }));
+
         try {
             const res = await fetch("/api/attendance", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(rows),
+                body: JSON.stringify(payload),
             });
 
             if (res.ok) {

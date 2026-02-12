@@ -307,21 +307,71 @@ function WorkerTableByBranch({ rows, onUpdate }: { rows: AttendanceRow[], onUpda
     );
 }
 
-// ── 주간 상세 기록 테이블 (정렬/필터 포함) ─────────────────────
-function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
-    const [sort, setSort] = useState<"date" | "late" | "overtime" | "work">("date");
+// ── 오늘 근무 섹션 (접기/펼치기) ─────────────────────────────
+function CollapsibleTodaySection({
+    todayRows,
+    handleUpdateRow,
+    todayStr
+}: {
+    todayRows: AttendanceRow[];
+    handleUpdateRow: (row: AttendanceRow, type: "part" | "rental", val: string) => void;
+    todayStr: string;
+}) {
+    const [isOpen, setIsOpen] = useState(false);
+
+    return (
+        <section className="border border-zinc-800">
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full flex items-center justify-between border-b border-zinc-800 px-4 py-2.5 bg-zinc-900/40 hover:bg-zinc-900/60 transition"
+            >
+                <div className="flex items-center gap-2">
+                    <div className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}>
+                        <TrendingUp size={14} className="text-zinc-500" />
+                    </div>
+                    <Users size={14} className="text-zinc-400" />
+                    <span className="text-xs font-semibold text-zinc-300">
+                        오늘 근무
+                    </span>
+                    <span className="text-[10px] text-zinc-600">
+                        {todayRows.length}명
+                    </span>
+                </div>
+                <span className="text-[10px] text-zinc-600">{todayStr}</span>
+            </button>
+
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                    >
+                        <WorkerTableByBranch rows={todayRows} onUpdate={handleUpdateRow} />
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </section>
+    );
+}
+
+// ── 월간 통계 테이블 (Member_Stats 기반) ───────────────────────
+function MonthlyStatsTable({ stats }: { stats: MemberStatRow[] }) {
+    const [sort, setSort] = useState<"name" | "late" | "overtime" | "work">("work");
 
     const sorted = useMemo(() => {
-        return [...rows].sort((a, b) => {
-            if (sort === "late") return parseDuration(b["지각"]) - parseDuration(a["지각"]);
-            if (sort === "overtime") return parseDuration(b["오버타임"]) - parseDuration(a["오버타임"]);
-            if (sort === "work") return parseDuration(b["총근무"]) - parseDuration(a["총근무"]);
-            // date desc
-            return new Date(b.날짜).getTime() - new Date(a.날짜).getTime();
+        return [...stats].sort((a, b) => {
+            if (sort === "late") return parseDuration(b["월간 지각"]) - parseDuration(a["월간 지각"]);
+            if (sort === "overtime") return parseDuration(b["월간 오버타임"]) - parseDuration(a["월간 오버타임"]);
+            if (sort === "work") return parseDuration(b["월간 총 근무"]) - parseDuration(a["월간 총 근무"]);
+            // name asc
+            return a.이름.localeCompare(b.이름);
         });
-    }, [rows, sort]);
+    }, [stats, sort]);
 
-    if (rows.length === 0) {
+    if (stats.length === 0) {
         return (
             <div className="border border-zinc-800 border-t-0 py-12 text-center">
                 <p className="text-xs text-zinc-600">데이터가 없습니다.</p>
@@ -336,10 +386,10 @@ function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
                 <span className="text-[10px] text-zinc-500">정렬</span>
                 <div className="flex gap-1">
                     {[
-                        { key: "date", label: "기본" },
+                        { key: "work", label: "총 근무 순" },
                         { key: "late", label: "지각 순" },
                         { key: "overtime", label: "오버타임 순" },
-                        { key: "work", label: "근무시간 순" },
+                        { key: "name", label: "이름 순" },
                     ].map((opt) => (
                         <button
                             key={opt.key}
@@ -360,31 +410,29 @@ function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
                 <table className="w-full text-xs">
                     <thead>
                         <tr className="border-b border-zinc-800/60 text-[10px] uppercase text-zinc-500">
-
                             <th className="px-4 py-2 text-left font-medium">이름</th>
-                            <th className="px-4 py-2 text-left font-medium">지각</th>
-                            <th className="px-4 py-2 text-left font-medium">오버타임</th>
-                            <th className="px-4 py-2 text-left font-medium">총 근무</th>
+                            <th className="px-4 py-2 text-left font-medium">월간 지각</th>
+                            <th className="px-4 py-2 text-left font-medium">월간 오버타임</th>
+                            <th className="px-4 py-2 text-left font-medium">월간 총 근무 시간</th>
                         </tr>
                     </thead>
                     <tbody>
                         {sorted.map((row, i) => (
                             <tr key={i} className="border-b border-zinc-800/30 hover:bg-zinc-800/20 transition">
-
                                 <td className="px-4 py-2 text-zinc-200 font-medium">{row.이름}</td>
                                 <td className="px-4 py-2">
-                                    <span className={safeNum(row["지각"]) > 0 ? "text-rose-400 font-bold" : "text-zinc-500"}>
-                                        {row["지각"] || "-"}
+                                    <span className={safeNum(row["월간 지각"]) > 0 ? "text-rose-400 font-bold" : "text-zinc-500"}>
+                                        {row["월간 지각"] || "-"}
                                     </span>
                                 </td>
                                 <td className="px-4 py-2">
-                                    <span className={safeNum(row["오버타임"]) > 0 ? "text-emerald-400 font-bold" : "text-zinc-500"}>
-                                        {row["오버타임"] || "-"}
+                                    <span className={safeNum(row["월간 오버타임"]) > 0 ? "text-emerald-400 font-bold" : "text-zinc-500"}>
+                                        {row["월간 오버타임"] || "-"}
                                     </span>
                                 </td>
                                 <td className="px-4 py-2">
                                     <span className="text-zinc-400">
-                                        {row["총근무"] || "-"}
+                                        {row["월간 총 근무"] || "-"}
                                     </span>
                                 </td>
                             </tr>
@@ -692,38 +740,8 @@ export default function DashboardPage() {
                                 />
                             </div>
 
-                            {/* 오늘 근무 — 지점별 테이블 */}
-                            <section className="border border-zinc-800">
-                                <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2.5 bg-zinc-900/40">
-                                    <div className="flex items-center gap-2">
-                                        <Users size={14} className="text-zinc-400" />
-                                        <span className="text-xs font-semibold text-zinc-300">
-                                            오늘 근무
-                                        </span>
-                                        <span className="text-[10px] text-zinc-600">
-                                            {todayRows.length}명
-                                        </span>
-                                    </div>
-                                    <span className="text-[10px] text-zinc-600">{todayStr}</span>
-                                </div>
-                                <WorkerTableByBranch rows={todayRows} onUpdate={handleUpdateRow} />
-                            </section>
-
-                            {/* 이번 달 요일별 기록 */}
-                            <section className="space-y-px">
-                                <div className="border border-zinc-800 px-4 py-2.5 bg-zinc-900/40">
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="text-xs font-semibold text-zinc-300">
-                                            이번 달 전체 기록
-                                        </span>
-                                        <span className="text-[10px] text-zinc-600">
-                                            {monthRows.length}건
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <WeeklyRecordTable rows={monthRows} />
-                            </section>
+                            {/* 오늘 근무 — 지점별 테이블 (접기/펼치기) */}
+                            <CollapsibleTodaySection todayRows={todayRows} handleUpdateRow={handleUpdateRow} todayStr={todayStr} />
                         </motion.div>
                     )}
 
