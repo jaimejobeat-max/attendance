@@ -31,9 +31,13 @@ interface AttendanceRow {
 }
 
 // ── 드롭다운 옵션 ──────────────────────────────────────────
-const BRANCH_OPTIONS = ["홍대", "한남", "7", "11", "20", "26", "27", "41", "10", "자율", "외근"];
+// ── 드롭다운 옵션 ──────────────────────────────────────────
+const BRANCH_OPTIONS = [
+    "홍대", "용산", "26", "27", "41", "원효", "신수", "한남", "뚝섬", "7", "11", "20", "10", "자율", "외근"
+];
+// 주요 이름들 (자동완성용 - 파싱은 텍스트 그대로 수집함)
 const NAME_OPTIONS = [
-    "인아", "진리", "현빈", "태정", "재민", "정헌", "문정", "연주", "다빈", "승헌", "태현", "재우",
+    "인아", "진리", "현빈", "태정", "재민", "정헌", "문정", "연주", "다빈", "승헌", "태현", "재우", "수빈", "채원", "현정"
 ];
 
 // ── 숫자(시간) 판별 헬퍼 ─────────────────────────────────────
@@ -42,17 +46,28 @@ function isTimeToken(tok: string): boolean {
 }
 
 // ── 텍스트 파서 ────────────────────────────────────────────
+// ── 파서 제외 키워드 ─────────────────────────────────────
+const IGNORE_KEYWORDS = ["마감", "ABD", "BGD", "1팀", "2팀", "3팀", "파트", "오픈", "미들"];
+
+function isValidName(text: string): boolean {
+    if (IGNORE_KEYWORDS.some(k => text.includes(k))) return false;
+    if (/^\d/.test(text)) return false; // 숫자로 시작하면 이름 아님
+    if (/^[A-Za-z]+$/.test(text)) return false; // 영어만 있으면 이름 아님 (ABD 등)
+    return true;
+}
+
+// ── 텍스트 파서 (Smart Parser) ─────────────────────────────
 function parseScheduleText(text: string, date: string): AttendanceRow[] {
     const results: AttendanceRow[] = [];
-    const lines = text
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean);
+    const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
 
     let lastBatchStart = 0;
 
     for (const line of lines) {
-        // *로 시작하는 줄 → 비고
+        // 무시할 라인
+        if (/^(스케줄 없음|근무\s*-|휴무\s*-|연차\s*-)/.test(line)) continue;
+
+        // *로 시작하는 줄 → 직전 배치에 비고 추가
         if (line.startsWith("*")) {
             const memo = line.slice(1).trim();
             for (let i = lastBatchStart; i < results.length; i++) {
@@ -65,57 +80,73 @@ function parseScheduleText(text: string, date: string): AttendanceRow[] {
 
         lastBatchStart = results.length;
 
-        // 괄호 안 내용 추출
+        // 1. 괄호() 안의 데이터 추출 (예: (14 다빈 인아))
+        //    해당 라인의 지점을 공유함
         const parenRegex = /\(([^)]+)\)/g;
-        const parenMatches: string[] = [];
         let match;
+        const subGroups: { time: string; names: string[] }[] = [];
+
         while ((match = parenRegex.exec(line)) !== null) {
-            parenMatches.push(match[1].trim());
-        }
+            const content = match[1];
+            const tokens = content.split(/\s+/).filter(Boolean);
 
-        const mainPart = line.replace(/\([^)]*\)/g, "").trim();
-        const tokens = mainPart.split(/\s+/);
-        if (tokens.length < 2) continue;
-
-        let idx = 0;
-        const branch = tokens[idx++];
-
-        let checkIn = "";
-        if (idx < tokens.length && isTimeToken(tokens[idx])) {
-            checkIn = tokens[idx++];
-        }
-
-        while (idx < tokens.length) {
-            const tok = tokens[idx];
-            if (isTimeToken(tok)) { idx++; continue; }
-
-            const name = tokens[idx++];
-            let checkOut = "";
-            if (idx < tokens.length && isTimeToken(tokens[idx])) {
-                checkOut = tokens[idx++];
-            }
-
-            results.push({
-                날짜: date, 지점: branch, 이름: name,
-                예정출근: checkIn, 실제출근: "", 예정퇴근: checkOut, 실제퇴근: "",
-                "지각(분)": "", "오버타임(분)": "", "총 근무시간(분)": "", 비고: "",
-            });
-        }
-
-        for (const pContent of parenMatches) {
-            const pTokens = pContent.split(/\s+/);
-            let pCheckOut = "";
+            let time = "";
             const names: string[] = [];
-            for (const pt of pTokens) {
-                if (isTimeToken(pt) && !pCheckOut) pCheckOut = pt;
-                else if (!isTimeToken(pt)) names.push(pt);
+
+            for (const token of tokens) {
+                if (isTimeToken(token) && !time) {
+                    time = token;
+                } else if (isValidName(token)) {
+                    names.push(token);
+                }
             }
-            for (const name of names) {
-                results.push({
-                    날짜: date, 지점: branch, 이름: name,
-                    예정출근: checkIn, 실제출근: "", 예정퇴근: pCheckOut, 실제퇴근: "",
-                    "지각(분)": "", "오버타임(분)": "", "총 근무시간(분)": "", 비고: "",
-                });
+            if (time && names.length > 0) {
+                subGroups.push({ time, names });
+            }
+        }
+
+        // 2. 괄호 제거 후 메인 파트 처리
+        const mainPart = line.replace(parenRegex, "").trim();
+        const tokens = mainPart.split(/\s+/).filter(Boolean);
+
+        if (tokens.length === 0) continue; // 괄호만 있었던 경우 등
+
+        // 첫 번째 토큰은 무조건 지점으로 간주
+        const branch = tokens[0];
+
+        // 메인 파트의 시간/이름 추출
+        let mainTime = "";
+        const mainNames: string[] = [];
+
+        // 두 번째 토큰이 시간이면 메인 시간으로 설정
+        if (tokens.length > 1 && isTimeToken(tokens[1])) {
+            mainTime = tokens[1];
+            // 나머지 토큰에서 이름 수집
+            for (let i = 2; i < tokens.length; i++) {
+                if (isValidName(tokens[i])) {
+                    mainNames.push(tokens[i]);
+                }
+            }
+        }
+
+        // 3. 결과 생성 helper
+        const createRow = (b: string, n: string, t: string) => ({
+            날짜: date, 지점: b, 이름: n,
+            예정출근: t, 실제출근: "", 예정퇴근: "", 실제퇴근: "",
+            "지각(분)": "", "오버타임(분)": "", "총 근무시간(분)": "", 비고: "",
+        });
+
+        // 메인 그룹 추가
+        if (mainTime && mainNames.length > 0) {
+            for (const name of mainNames) {
+                results.push(createRow(branch, name, mainTime));
+            }
+        }
+
+        // 괄호 서브 그룹 추가 (지점은 메인 라인의 것을 상속)
+        for (const group of subGroups) {
+            for (const name of group.names) {
+                results.push(createRow(branch, name, group.time));
             }
         }
     }
