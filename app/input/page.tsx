@@ -56,6 +56,22 @@ function isValidName(text: string): boolean {
     return true;
 }
 
+// ── 9시간 더하기 헬퍼 ────────────────────────────────────────
+function addNineHours(timeStr: string): string {
+    if (!timeStr) return "";
+    const [hStr, mStr] = timeStr.split(":");
+    let h = parseInt(hStr, 10);
+    const m = mStr ? parseInt(mStr, 10) : 0;
+
+    if (isNaN(h)) return "";
+
+    h = (h + 9) % 24;
+
+    const hh = h.toString().padStart(2, "0");
+    const mm = m.toString().padStart(2, "0");
+    return `${hh}:${mm}`;
+}
+
 // ── 텍스트 파서 (Smart Parser) ─────────────────────────────
 function parseScheduleText(text: string, date: string): AttendanceRow[] {
     const results: AttendanceRow[] = [];
@@ -132,7 +148,10 @@ function parseScheduleText(text: string, date: string): AttendanceRow[] {
         // 3. 결과 생성 helper
         const createRow = (b: string, n: string, t: string) => ({
             날짜: date, 지점: b, 이름: n,
-            예정출근: t, 실제출근: "", 예정퇴근: "", 실제퇴근: "",
+            예정출근: t,
+            실제출근: "",
+            예정퇴근: addNineHours(t), // 예정퇴근 자동 계산 (+9시간)
+            실제퇴근: "",
             "지각(분)": "", "오버타임(분)": "", "총 근무시간(분)": "", 비고: "",
         });
 
