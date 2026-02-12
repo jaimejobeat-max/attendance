@@ -26,6 +26,7 @@ interface AttendanceRow {
     "지각(분)": string;
     "오버타임(분)": string;
     비고: string;
+    _rowNumber?: number;
 }
 
 type TabType = "weekly" | "monthly";
@@ -98,7 +99,31 @@ function extractRental(memo: string): string {
         /대관\s*[:：]?\s*([^\s,]+(?:\s*~\s*[^\s,]+)?)/i
     );
     if (rentalMatch) return rentalMatch[1];
-    return "—";
+    if (rentalMatch) return rentalMatch[1];
+    return "";
+}
+
+function updateNote(note: string, type: "part" | "rental", value: string): string {
+    let newNote = note || "";
+    const prefix = type === "part" ? "파트" : "대관";
+
+    // 기존 파트/대관 제거
+    if (type === "part") {
+        newNote = newNote.replace(/파트\s*[:：]?\s*([^\s,]+)/i, "").replace(/([^\s,]+)\s*파트/i, "").trim();
+        // 오픈/마감/미들 키워드 제거
+        newNote = newNote.replace(/오픈|마감|미들/gi, "").trim();
+    } else {
+        newNote = newNote.replace(/대관\s*[:：]?\s*([^\s,]+(?:\s*~\s*[^\s,]+)?)/i, "").trim();
+    }
+
+    // 슬래시 정리 (중복/양끝)
+    newNote = newNote.replace(/\/+/g, "/").replace(/^\/|\/$/g, "").trim();
+
+    if (!value) return newNote;
+
+    // 새 값 추가
+    const newVal = type === "part" ? `파트: ${value}` : `대관: ${value}`;
+    return newNote ? `${newNote} / ${newVal}` : newVal;
 }
 
 // 요일 정렬 (월~일)
@@ -196,7 +221,8 @@ function WorkerTable({ rows }: { rows: AttendanceRow[] }) {
 }
 
 // ── 지점별 근무자 테이블 ─────────────────────────────────────
-function WorkerTableByBranch({ rows }: { rows: AttendanceRow[] }) {
+// ── 지점별 근무자 테이블 (수정 가능) ──────────────────────────
+function WorkerTableByBranch({ rows, onUpdate }: { rows: AttendanceRow[], onUpdate: (row: AttendanceRow, type: "part" | "rental", val: string) => void }) {
     if (rows.length === 0) {
         return (
             <p className="text-xs text-zinc-600 py-6 text-center">
@@ -230,8 +256,8 @@ function WorkerTableByBranch({ rows }: { rows: AttendanceRow[] }) {
                             <thead>
                                 <tr className="border-b border-zinc-800/60">
                                     <th className="px-3 py-1.5 text-left font-medium text-zinc-600 w-20">이름</th>
-                                    <th className="px-3 py-1.5 text-left font-medium text-zinc-600 w-16">파트</th>
-                                    <th className="px-3 py-1.5 text-left font-medium text-zinc-600 w-20">대관</th>
+                                    <th className="px-3 py-1.5 text-left font-medium text-zinc-600 w-24">파트</th>
+                                    <th className="px-3 py-1.5 text-left font-medium text-zinc-600 w-24">대관시간</th>
                                     <th className="px-3 py-1.5 text-left font-medium text-zinc-600 w-16">출근</th>
                                     <th className="px-3 py-1.5 text-left font-medium text-zinc-600 w-16">퇴근</th>
                                 </tr>
@@ -240,8 +266,26 @@ function WorkerTableByBranch({ rows }: { rows: AttendanceRow[] }) {
                                 {branchRows.map((row, i) => (
                                     <tr key={i} className="border-b border-zinc-800/30 hover:bg-zinc-800/20 transition-colors">
                                         <td className="px-3 py-1.5 text-zinc-100 font-medium">{row.이름}</td>
-                                        <td className="px-3 py-1.5 text-zinc-400">{extractPart(row.비고)}</td>
-                                        <td className="px-3 py-1.5 text-zinc-400">{extractRental(row.비고)}</td>
+                                        <td className="px-3 py-1.5">
+                                            <input
+                                                type="text"
+                                                defaultValue={extractPart(row.비고).replace("—", "")}
+                                                onBlur={(e) => onUpdate(row, "part", e.target.value)}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                                                className="w-full bg-transparent text-zinc-400 focus:text-zinc-100 outline-none placeholder:text-zinc-700"
+                                                placeholder="입력"
+                                            />
+                                        </td>
+                                        <td className="px-3 py-1.5">
+                                            <input
+                                                type="text"
+                                                defaultValue={extractRental(row.비고).replace("—", "")}
+                                                onBlur={(e) => onUpdate(row, "rental", e.target.value)}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                                                className="w-full bg-transparent text-zinc-400 focus:text-zinc-100 outline-none placeholder:text-zinc-700"
+                                                placeholder="입력"
+                                            />
+                                        </td>
                                         <td className="px-3 py-1.5 text-zinc-300">{row.실제출근 || row.예정출근 || "—"}</td>
                                         <td className="px-3 py-1.5 text-zinc-300">{row.실제퇴근 || row.예정퇴근 || "—"}</td>
                                     </tr>
@@ -468,18 +512,35 @@ export default function DashboardPage() {
 
 
 
-    // ── 월간 일자별 그룹 ────────────────────────────────
-    const monthlyByDate = useMemo(() => {
-        const map = new Map<string, AttendanceRow[]>();
-        for (const row of monthRows) {
-            const key = row.날짜;
-            if (!map.has(key)) map.set(key, []);
-            map.get(key)!.push(row);
+
+    // ── 데이터 업데이트 (파트/대관) ────────────────────────
+    const handleUpdateRow = async (row: AttendanceRow, type: "part" | "rental", val: string) => {
+        if (!row._rowNumber) return;
+
+        const currentVal = type === "part" ? extractPart(row.비고) : extractRental(row.비고);
+        if (currentVal === val || (currentVal === "—" && !val)) return;
+
+        const newNote = updateNote(row.비고, type, val);
+
+        // Optimistic Update
+        const newData = data.map(r => r._rowNumber === row._rowNumber ? { ...r, 비고: newNote } : r);
+        setData(newData);
+
+        // API Call
+        try {
+            await fetch("/api/attendance", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    rowNumber: row._rowNumber,
+                    data: { "비고": newNote }
+                })
+            });
+        } catch (e) {
+            console.error("Failed to update note", e);
+            // Revert on error? For now just log.
         }
-        return Array.from(map.entries()).sort(
-            (a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime()
-        );
-    }, [monthRows]);
+    };
 
     // ── 로딩 ─────────────────────────────────────────────
     if (loading) {
@@ -587,7 +648,7 @@ export default function DashboardPage() {
                                     </div>
                                     <span className="text-[10px] text-zinc-600">{todayStr}</span>
                                 </div>
-                                <WorkerTableByBranch rows={todayRows} />
+                                <WorkerTableByBranch rows={todayRows} onUpdate={handleUpdateRow} />
                             </section>
 
                             {/* 이번 주 요일별 기록 (월~일) */}
@@ -621,38 +682,8 @@ export default function DashboardPage() {
                                 {today.getFullYear()}년 {today.getMonth() + 1}월
                             </p>
 
-                            {/* 통계 카드 */}
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-px border border-zinc-800">
-                                <div className="bg-zinc-900/60 p-4">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <TrendingUp size={14} className="text-zinc-400" />
-                                        <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest">
-                                            총 근무
-                                        </span>
-                                    </div>
-                                    <div className="flex items-baseline gap-1">
-                                        <span className="text-2xl font-bold tracking-tight text-zinc-100">
-                                            {monthlyTotalShifts}
-                                        </span>
-                                        <span className="text-xs text-zinc-600">건</span>
-                                    </div>
-                                </div>
-
-                                <div className="bg-zinc-900/60 p-4">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <Users size={14} className="text-zinc-400" />
-                                        <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest">
-                                            참여 인원
-                                        </span>
-                                    </div>
-                                    <div className="flex items-baseline gap-1">
-                                        <span className="text-2xl font-bold tracking-tight text-zinc-100">
-                                            {monthlyUniqueWorkers}
-                                        </span>
-                                        <span className="text-xs text-zinc-600">명</span>
-                                    </div>
-                                </div>
-
+                            {/* 통계 카드 (간소화됨) */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-px border border-zinc-800">
                                 <DetailStatCard
                                     icon={AlertTriangle}
                                     label="누적 지각"
@@ -667,44 +698,10 @@ export default function DashboardPage() {
                                     accentClass="text-emerald-400"
                                 />
                             </div>
-
-                            {/* 일자별 리스트 */}
-                            <section className="space-y-px">
-                                <div className="border border-zinc-800 px-4 py-2.5 bg-zinc-900/40">
-                                    <span className="text-xs font-semibold text-zinc-300">
-                                        월간 전체 기록
-                                    </span>
-                                </div>
-
-                                {monthlyByDate.length === 0 ? (
-                                    <div className="border border-zinc-800 border-t-0 py-8 text-center">
-                                        <p className="text-xs text-zinc-600">
-                                            이번 달 등록된 데이터가 없습니다.
-                                        </p>
-                                    </div>
-                                ) : (
-                                    monthlyByDate.map(([dateStr, rows]) => (
-                                        <div
-                                            key={dateStr}
-                                            className="border border-zinc-800 border-t-0"
-                                        >
-                                            <div className="flex items-center justify-between border-b border-zinc-800/60 px-4 py-2 bg-zinc-950">
-                                                <span className="text-[11px] font-medium text-zinc-400">
-                                                    {formatDateKR(dateStr)}
-                                                </span>
-                                                <span className="text-[10px] text-zinc-700">
-                                                    {rows.length}명
-                                                </span>
-                                            </div>
-                                            <WorkerTable rows={rows} />
-                                        </div>
-                                    ))
-                                )}
-                            </section>
                         </motion.div>
                     )}
                 </AnimatePresence>
             </main>
-        </div>
+        </div >
     );
 }
