@@ -26,7 +26,7 @@ interface AttendanceRow {
     실제퇴근: string;
     "지각(분)": string;
     "오버타임(분)": string;
-    "총 근무시간(분)": string;
+    "총 근무 시간": string;
     비고: string;
 }
 
@@ -152,7 +152,7 @@ function parseScheduleText(text: string, date: string): AttendanceRow[] {
             실제출근: "",
             예정퇴근: addNineHours(t), // 예정퇴근 자동 계산 (+9시간)
             실제퇴근: "",
-            "지각(분)": "", "오버타임(분)": "", "총 근무시간(분)": "", 비고: "",
+            "지각(분)": "", "오버타임(분)": "", "총 근무 시간": "", 비고: "",
         });
 
         // 메인 그룹 추가
@@ -265,9 +265,8 @@ const COLUMNS: ColDef[] = [
     { key: "예정퇴근", label: "예정퇴근", w: "w-[80px]", type: "text" },
     { key: "실제퇴근", label: "실제퇴근", w: "w-[80px]", type: "text" },
     { key: "지각(분)", label: "지각", w: "w-[64px]", type: "text" },
-    { key: "지각(분)", label: "지각", w: "w-[64px]", type: "text" },
     { key: "오버타임(분)", label: "오버타임", w: "w-[72px]", type: "text" },
-    { key: "총 근무시간(분)", label: "총 근무", w: "w-[72px]", type: "text" },
+    { key: "총 근무 시간", label: "총 근무", w: "w-[72px]", type: "text" },
     { key: "비고", label: "비고", w: "w-[140px]", type: "text" },
 ];
 
@@ -355,9 +354,9 @@ export default function InputPage() {
                     const end = timeToMinutes(updated.실제퇴근);
                     if (start !== null && end !== null) {
                         const diff = end - start;
-                        updated["총 근무시간(분)"] = diff > 0 ? diff.toString() : "0";
+                        updated["총 근무 시간"] = diff > 0 ? diff.toString() : "0";
                     } else if (!updated.실제출근 || !updated.실제퇴근) {
-                        updated["총 근무시간(분)"] = "";
+                        updated["총 근무 시간"] = "";
                     }
                 }
 
@@ -378,7 +377,7 @@ export default function InputPage() {
             {
                 날짜: date, 지점: "", 이름: "",
                 예정출근: "", 실제출근: "", 예정퇴근: "", 실제퇴근: "",
-                "지각(분)": "", "오버타임(분)": "", "총 근무시간(분)": "", 비고: "",
+                "지각(분)": "", "오버타임(분)": "", "총 근무 시간": "", 비고: "",
             },
         ]);
     };
