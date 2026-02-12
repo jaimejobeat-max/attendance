@@ -398,11 +398,9 @@ export default function InputPage() {
     // 초기화
     const resetTable = () => {
         if (rows.length === 0) return;
-        if (confirm("모든 데이터를 초기화하시겠습니까?")) {
-            setRows([]);
-            setRawText("");
-            showToast("success", "초기화되었습니다.");
-        }
+        setRows([]);
+        setRawText("");
+        showToast("success", "초기화되었습니다.");
     };
 
     return (
@@ -468,6 +466,7 @@ export default function InputPage() {
                         </div>
                         <div className="flex items-center gap-2">
                             <button
+                                type="button"
                                 onClick={resetTable}
                                 disabled={rows.length === 0}
                                 className="flex items-center gap-1 px-2.5 py-1 text-[11px] text-zinc-400 border border-zinc-700 hover:border-red-500 hover:text-red-400 transition disabled:opacity-30 disabled:cursor-not-allowed"
