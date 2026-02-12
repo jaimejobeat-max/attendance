@@ -313,9 +313,9 @@ function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
 
     const sorted = useMemo(() => {
         return [...rows].sort((a, b) => {
-            if (sort === "late") return safeNum(b["지각"]) - safeNum(a["지각"]);
-            if (sort === "overtime") return safeNum(b["오버타임"]) - safeNum(a["오버타임"]);
-            if (sort === "work") return safeNum(b["총근무"]) - safeNum(a["총근무"]);
+            if (sort === "late") return parseDuration(b["지각"]) - parseDuration(a["지각"]);
+            if (sort === "overtime") return parseDuration(b["오버타임"]) - parseDuration(a["오버타임"]);
+            if (sort === "work") return parseDuration(b["총근무"]) - parseDuration(a["총근무"]);
             // date desc
             return new Date(b.날짜).getTime() - new Date(a.날짜).getTime();
         });
