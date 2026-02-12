@@ -389,17 +389,20 @@ function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
     );
 }
 
+
 // ── 사람별 상세 리스트 카드 (총합 없이 개인별만) ─────────────
 function DetailStatCard({
     icon: Icon,
     label,
     persons,
     accentClass,
+    formatter = (val: number) => `${val}분`,
 }: {
     icon: React.ElementType;
     label: string;
     persons: PersonStat[];
     accentClass: string;
+    formatter?: (val: number) => string;
 }) {
     return (
         <div className="border border-zinc-800 bg-zinc-900/60 p-4">
@@ -415,7 +418,7 @@ function DetailStatCard({
                         <div key={p.name} className="flex items-center justify-between">
                             <span className="text-[11px] text-zinc-400">{p.name}</span>
                             <span className={`text-[11px] font-medium ${accentClass}`}>
-                                {p.total}분
+                                {formatter(p.total)}
                             </span>
                         </div>
                     ))}
@@ -429,7 +432,7 @@ function DetailStatCard({
     );
 }
 
-// ── 메인 대시보드 ──────────────────────────────────────────
+
 export default function DashboardPage() {
     const [data, setData] = useState<AttendanceRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -649,6 +652,11 @@ export default function DashboardPage() {
                                     label="주간 총 근무시간"
                                     persons={weeklyTotalWorkPersons}
                                     accentClass="text-indigo-400"
+                                    formatter={(val) => {
+                                        const h = Math.floor(val / 60);
+                                        const m = val % 60;
+                                        return m > 0 ? `${h}시간 ${m}분` : `${h}시간`;
+                                    }}
                                 />
                             </div>
 
