@@ -26,6 +26,7 @@ interface AttendanceRow {
     실제퇴근: string;
     "지각(분)": string;
     "오버타임(분)": string;
+    "총 근무시간(분)": string;
     비고: string;
 }
 
@@ -97,7 +98,7 @@ function parseScheduleText(text: string, date: string): AttendanceRow[] {
             results.push({
                 날짜: date, 지점: branch, 이름: name,
                 예정출근: checkIn, 실제출근: "", 예정퇴근: checkOut, 실제퇴근: "",
-                "지각(분)": "", "오버타임(분)": "", 비고: "",
+                "지각(분)": "", "오버타임(분)": "", "총 근무시간(분)": "", 비고: "",
             });
         }
 
@@ -113,7 +114,7 @@ function parseScheduleText(text: string, date: string): AttendanceRow[] {
                 results.push({
                     날짜: date, 지점: branch, 이름: name,
                     예정출근: checkIn, 실제출근: "", 예정퇴근: pCheckOut, 실제퇴근: "",
-                    "지각(분)": "", "오버타임(분)": "", 비고: "",
+                    "지각(분)": "", "오버타임(분)": "", "총 근무시간(분)": "", 비고: "",
                 });
             }
         }
@@ -214,7 +215,9 @@ const COLUMNS: ColDef[] = [
     { key: "예정퇴근", label: "예정퇴근", w: "w-[80px]", type: "text" },
     { key: "실제퇴근", label: "실제퇴근", w: "w-[80px]", type: "text" },
     { key: "지각(분)", label: "지각", w: "w-[64px]", type: "text" },
+    { key: "지각(분)", label: "지각", w: "w-[64px]", type: "text" },
     { key: "오버타임(분)", label: "오버타임", w: "w-[72px]", type: "text" },
+    { key: "총 근무시간(분)", label: "총 근무", w: "w-[72px]", type: "text" },
     { key: "비고", label: "비고", w: "w-[140px]", type: "text" },
 ];
 
@@ -292,8 +295,19 @@ export default function InputPage() {
                         const diff = actual - sched;
                         updated["오버타임(분)"] = diff > 0 ? diff.toString() : "0";
                     } else if (!updated.실제퇴근) {
-                        // 실제퇴근 값이 없으면 초기화
                         updated["오버타임(분)"] = "";
+                    }
+                }
+
+                // ── 총 근무시간 자동 계산: 실제퇴근 - 실제출근 ──
+                if (key === "실제출근" || key === "실제퇴근") {
+                    const start = timeToMinutes(updated.실제출근);
+                    const end = timeToMinutes(updated.실제퇴근);
+                    if (start !== null && end !== null) {
+                        const diff = end - start;
+                        updated["총 근무시간(분)"] = diff > 0 ? diff.toString() : "0";
+                    } else if (!updated.실제출근 || !updated.실제퇴근) {
+                        updated["총 근무시간(분)"] = "";
                     }
                 }
 
@@ -314,7 +328,7 @@ export default function InputPage() {
             {
                 날짜: date, 지점: "", 이름: "",
                 예정출근: "", 실제출근: "", 예정퇴근: "", 실제퇴근: "",
-                "지각(분)": "", "오버타임(분)": "", 비고: "",
+                "지각(분)": "", "오버타임(분)": "", "총 근무시간(분)": "", 비고: "",
             },
         ]);
     };

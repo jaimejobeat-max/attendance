@@ -25,6 +25,7 @@ interface AttendanceRow {
     실제퇴근: string;
     "지각(분)": string;
     "오버타임(분)": string;
+    "총 근무시간(분)": string;
     비고: string;
     _rowNumber?: number;
 }
@@ -141,7 +142,7 @@ interface PersonStat {
 
 function getPerPersonStats(
     rows: AttendanceRow[],
-    field: "지각(분)" | "오버타임(분)"
+    field: "지각(분)" | "오버타임(분)" | "총 근무시간(분)"
 ): PersonStat[] {
     const map = new Map<string, number>();
     for (const row of rows) {
@@ -509,6 +510,10 @@ export default function DashboardPage() {
         () => getPerPersonStats(monthRows, "오버타임(분)"),
         [monthRows]
     );
+    const weeklyTotalWorkPersons = useMemo(
+        () => getPerPersonStats(weekRows, "총 근무시간(분)"),
+        [weekRows]
+    );
 
 
 
@@ -631,6 +636,15 @@ export default function DashboardPage() {
                                     label="주간 오버타임"
                                     persons={weeklyOvertimePersons}
                                     accentClass="text-emerald-400"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 border border-zinc-800 border-t-0">
+                                <DetailStatCard
+                                    icon={Clock}
+                                    label="주간 총 근무시간"
+                                    persons={weeklyTotalWorkPersons}
+                                    accentClass="text-indigo-400"
                                 />
                             </div>
 
