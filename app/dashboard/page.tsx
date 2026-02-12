@@ -302,12 +302,13 @@ function WorkerTableByBranch({ rows, onUpdate }: { rows: AttendanceRow[], onUpda
 
 // ── 주간 상세 기록 테이블 (정렬/필터 포함) ─────────────────────
 function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
-    const [sort, setSort] = useState<"date" | "late" | "overtime">("date");
+    const [sort, setSort] = useState<"date" | "late" | "overtime" | "work">("date");
 
     const sorted = useMemo(() => {
         return [...rows].sort((a, b) => {
             if (sort === "late") return safeNum(b["지각(분)"]) - safeNum(a["지각(분)"]);
             if (sort === "overtime") return safeNum(b["오버타임(분)"]) - safeNum(a["오버타임(분)"]);
+            if (sort === "work") return safeNum(b["총 근무 시간"]) - safeNum(a["총 근무 시간"]);
             // date desc
             return new Date(b.날짜).getTime() - new Date(a.날짜).getTime();
         });
@@ -331,6 +332,7 @@ function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
                         { key: "date", label: "기본" },
                         { key: "late", label: "지각 순" },
                         { key: "overtime", label: "오버타임 순" },
+                        { key: "work", label: "근무시간 순" },
                     ].map((opt) => (
                         <button
                             key={opt.key}
@@ -355,6 +357,7 @@ function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
                             <th className="px-4 py-2 text-left font-medium">이름</th>
                             <th className="px-4 py-2 text-left font-medium">지각</th>
                             <th className="px-4 py-2 text-left font-medium">오버타임</th>
+                            <th className="px-4 py-2 text-left font-medium">총 근무</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -375,6 +378,9 @@ function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
                                     ) : (
                                         <span className="text-zinc-700">-</span>
                                     )}
+                                </td>
+                                <td className="px-4 py-2">
+                                    <span className="text-zinc-400">{row["총 근무 시간"] ? `${row["총 근무 시간"]}분` : "-"}</span>
                                 </td>
                             </tr>
                         ))}
@@ -665,31 +671,20 @@ export default function DashboardPage() {
                                 <WorkerTableByBranch rows={todayRows} onUpdate={handleUpdateRow} />
                             </section>
 
-                            {/* 이번 주 요일별 기록 (월~일) */}
+                            {/* 이번 달 요일별 기록 */}
                             <section className="space-y-px">
                                 <div className="border border-zinc-800 px-4 py-2.5 bg-zinc-900/40">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-xs font-semibold text-zinc-300">
-                                                이번 주 전체 기록
-                                            </span>
-                                            <span className="text-[10px] text-zinc-600">
-                                                {weekRows.length}건
-                                            </span>
-                                        </div>
-                                        <div className="h-3 w-px bg-zinc-800" />
-                                        <div className="flex items-center gap-2 text-[10px]">
-                                            <span className="text-zinc-500">
-                                                지각 <span className="text-rose-400 font-medium">{weeklyLate}분</span>
-                                            </span>
-                                            <span className="text-zinc-500">
-                                                오버타임 <span className="text-emerald-400 font-medium">{weeklyOvertime}분</span>
-                                            </span>
-                                        </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-xs font-semibold text-zinc-300">
+                                            이번 달 전체 기록
+                                        </span>
+                                        <span className="text-[10px] text-zinc-600">
+                                            {monthRows.length}건
+                                        </span>
                                     </div>
                                 </div>
 
-                                <WeeklyRecordTable rows={weekRows} />
+                                <WeeklyRecordTable rows={monthRows} />
                             </section>
                         </motion.div>
                     )}
