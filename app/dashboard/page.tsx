@@ -140,21 +140,7 @@ interface PersonStat {
     total: number | string;
 }
 
-function getPerPersonStats(
-    rows: AttendanceRow[],
-    field: "지각" | "오버타임" | "총근무"
-): PersonStat[] {
-    const map = new Map<string, number>();
-    for (const row of rows) {
-        const val = safeNum(row[field]);
-        if (val > 0) {
-            map.set(row.이름, (map.get(row.이름) || 0) + val);
-        }
-    }
-    return Array.from(map.entries())
-        .map(([name, total]) => ({ name, total }))
-        .sort((a, b) => b.total - a.total);
-}
+
 
 // ── 근무자 테이블 컴포넌트 ─────────────────────────────────
 function WorkerTable({ rows }: { rows: AttendanceRow[] }) {
@@ -399,6 +385,7 @@ interface MemberStatRow {
     "주간 오버타임": string;
     "월간 오버타임": string;
     "월간 지각": string;
+    "주간 지각": string;
 }
 
 
@@ -495,11 +482,13 @@ export default function DashboardPage() {
     );
 
     // ── 주간 통계 (사람별) ────────────────────────────────
-    // 주간 지각: 기존 로직 유지 (시트에 주간 지각 컬럼 없음)
-    const weeklyLatePersons = useMemo(
-        () => getPerPersonStats(weekRows, "지각"),
-        [weekRows]
-    );
+    // 주간 지각: Member_Stats 연동
+    const weeklyLatePersons = useMemo(() => {
+        if (stats.length === 0) return [];
+        return stats
+            .map(s => ({ name: s.이름, total: s["주간 지각"] }))
+            .filter(p => p.total && p.total !== "0분" && p.total !== "0");
+    }, [stats]);
 
     // 주간 오버타임: Member_Stats 연동
     const weeklyOvertimePersons = useMemo(() => {
