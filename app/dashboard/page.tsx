@@ -142,6 +142,27 @@ interface PersonStat {
 
 
 
+// ── 시간 파싱 헬퍼 (예: "9시간 13분" -> 분 단위 정수) ──────────
+function parseDuration(val: string | number): number {
+    if (typeof val === "number") return val;
+    if (!val) return 0;
+    const str = String(val).trim();
+
+    // "9시간 13분" format
+    const hmMatch = str.match(/(\d+)시간\s*(\d+)분/);
+    if (hmMatch) {
+        return parseInt(hmMatch[1]) * 60 + parseInt(hmMatch[2]);
+    }
+
+    // "XXX분" is treated as minutes
+    if (str.includes("분")) {
+        return parseInt(str.replace(/[^0-9]/g, "")) || 0;
+    }
+
+    // Just number assumed as minutes
+    return parseInt(str.replace(/[^0-9]/g, "")) || 0;
+}
+
 // ── 근무자 테이블 컴포넌트 ─────────────────────────────────
 function WorkerTable({ rows }: { rows: AttendanceRow[] }) {
     if (rows.length === 0) {
@@ -487,7 +508,8 @@ export default function DashboardPage() {
         if (stats.length === 0) return [];
         return stats
             .map(s => ({ name: s.이름, total: s["주간 지각"] }))
-            .filter(p => p.total && p.total !== "0분" && p.total !== "0");
+            .filter(p => p.total && p.total !== "0분" && p.total !== "0")
+            .sort((a, b) => parseDuration(b.total) - parseDuration(a.total));
     }, [stats]);
 
     // 주간 오버타임: Member_Stats 연동
@@ -496,7 +518,7 @@ export default function DashboardPage() {
         return stats
             .map(s => ({ name: s.이름, total: s["주간 오버타임"] }))
             .filter(p => p.total && p.total !== "0분" && p.total !== "0")
-            .sort((a, b) => safeNum(String(b.total)) - safeNum(String(a.total))); // 숫자 기준 정렬 시도 (문자열이면 부정확할 수 있음)
+            .sort((a, b) => parseDuration(b.total) - parseDuration(a.total));
     }, [stats]);
 
     // 주간 총 근무시간: Member_Stats 연동
@@ -504,7 +526,8 @@ export default function DashboardPage() {
         if (stats.length === 0) return [];
         return stats
             .map(s => ({ name: s.이름, total: s["주간 총 근무"] }))
-            .filter(p => p.total && p.total !== "0분" && p.total !== "0시간 0분");
+            .filter(p => p.total && p.total !== "0분" && p.total !== "0시간 0분")
+            .sort((a, b) => parseDuration(b.total) - parseDuration(a.total));
     }, [stats]);
 
     // ── 월간 통계 ────────────────────────────────────────
@@ -515,7 +538,8 @@ export default function DashboardPage() {
         if (stats.length === 0) return [];
         return stats
             .map(s => ({ name: s.이름, total: s["월간 지각"] }))
-            .filter(p => p.total && p.total !== "0분" && p.total !== "0");
+            .filter(p => p.total && p.total !== "0분" && p.total !== "0")
+            .sort((a, b) => parseDuration(b.total) - parseDuration(a.total));
     }, [stats]);
 
     // 월간 오버타임: Member_Stats 연동
@@ -523,7 +547,8 @@ export default function DashboardPage() {
         if (stats.length === 0) return [];
         return stats
             .map(s => ({ name: s.이름, total: s["월간 오버타임"] }))
-            .filter(p => p.total && p.total !== "0분" && p.total !== "0");
+            .filter(p => p.total && p.total !== "0분" && p.total !== "0")
+            .sort((a, b) => parseDuration(b.total) - parseDuration(a.total));
     }, [stats]);
 
     // 월간 총 근무: Member_Stats 연동 (신규)
@@ -531,7 +556,8 @@ export default function DashboardPage() {
         if (stats.length === 0) return [];
         return stats
             .map(s => ({ name: s.이름, total: s["월간 총 근무"] }))
-            .filter(p => p.total && p.total !== "0분" && p.total !== "0시간 0분");
+            .filter(p => p.total && p.total !== "0분" && p.total !== "0시간 0분")
+            .sort((a, b) => parseDuration(b.total) - parseDuration(a.total));
     }, [stats]);
 
 
