@@ -80,21 +80,34 @@ export async function GET() {
   }
 }
 
-// ── POST: 새로운 출석 데이터 추가 ────────────────────────
+// ── POST: 새로운 출석 데이터 추가 (단일 또는 다수) ──────────
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    if (!body || typeof body !== "object") {
+    if (!body || (typeof body !== "object")) {
       return NextResponse.json(
-        { success: false, error: "Request body must be a JSON object" },
+        { success: false, error: "Request body must be a JSON object or array" },
         { status: 400 }
       );
     }
 
     const sheet = await getSheet();
-    const newRow = await sheet.addRow(body);
 
+    // 배열이면 일괄 추가 (addRows)
+    if (Array.isArray(body)) {
+      if (body.length === 0) {
+        return NextResponse.json({ success: true, message: "No data to add" }, { status: 200 });
+      }
+      await sheet.addRows(body);
+      return NextResponse.json(
+        { success: true, message: `${body.length} rows added` },
+        { status: 201 }
+      );
+    }
+
+    // 객체면 단일 추가 (addRow)
+    const newRow = await sheet.addRow(body);
     const addedData: Record<string, string> = {};
     for (const header of sheet.headerValues) {
       addedData[header] = newRow.get(header) ?? "";

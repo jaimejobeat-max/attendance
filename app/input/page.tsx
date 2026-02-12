@@ -383,28 +383,25 @@ export default function InputPage() {
     };
 
     // 전송
+    // 전송
     const handleSubmit = async () => {
         if (rows.length === 0) return;
         setIsSending(true);
 
         try {
-            const results = await Promise.all(
-                rows.map((row) =>
-                    fetch("/api/attendance", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(row),
-                    })
-                )
-            );
+            const res = await fetch("/api/attendance", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(rows),
+            });
 
-            const allOk = results.every((r) => r.ok);
-            if (allOk) {
+            if (res.ok) {
                 showToast("success", `${rows.length}건의 데이터가 시트에 기록되었습니다.`);
                 setRows([]);
                 setRawText("");
             } else {
-                showToast("error", "일부 데이터 전송에 실패했습니다.");
+                const data = await res.json();
+                showToast("error", data.error || "데이터 전송에 실패했습니다.");
             }
         } catch {
             showToast("error", "서버 연결에 실패했습니다.");
