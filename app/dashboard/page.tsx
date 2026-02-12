@@ -137,7 +137,7 @@ function getDayOfWeekOrder(dateStr: string): number {
 // ── 사람별 통계 계산 ───────────────────────────────────────
 interface PersonStat {
     name: string;
-    total: number;
+    total: number | string;
 }
 
 function getPerPersonStats(
@@ -389,6 +389,19 @@ function WeeklyRecordTable({ rows }: { rows: AttendanceRow[] }) {
     );
 }
 
+// ── 사람별 통계 계산 ───────────────────────────────────────
+
+
+interface MemberStatRow {
+    "이름": string;
+    "주간 총 근무": string;
+    "월간 총 근무": string;
+    "주간 오버타임": string;
+    "월간 오버타임": string;
+    "월간 지각": string;
+}
+
+
 
 // ── 사람별 상세 리스트 카드 (총합 없이 개인별만) ─────────────
 function DetailStatCard({
@@ -396,13 +409,13 @@ function DetailStatCard({
     label,
     persons,
     accentClass,
-    formatter = (val: number) => `${val}분`,
+    formatter = (val: number | string) => typeof val === "number" ? `${val}분` : val,
 }: {
     icon: React.ElementType;
     label: string;
     persons: PersonStat[];
     accentClass: string;
-    formatter?: (val: number) => string;
+    formatter?: (val: number | string) => string;
 }) {
     return (
         <div className="border border-zinc-800 bg-zinc-900/60 p-4">
@@ -432,9 +445,10 @@ function DetailStatCard({
     );
 }
 
-
+// ── 메인 대시보드 ──────────────────────────────────────────
 export default function DashboardPage() {
     const [data, setData] = useState<AttendanceRow[]>([]);
+    const [stats, setStats] = useState<MemberStatRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<TabType>("weekly");
 
@@ -447,7 +461,10 @@ export default function DashboardPage() {
         fetch("/api/attendance")
             .then((r) => r.json())
             .then((res) => {
-                if (res.success) setData(res.data);
+                if (res.success) {
+                    setData(res.data);
+                    if (res.stats) setStats(res.stats);
+                }
             })
             .catch(console.error)
             .finally(() => setLoading(false));
@@ -478,51 +495,55 @@ export default function DashboardPage() {
     );
 
     // ── 주간 통계 (사람별) ────────────────────────────────
-    const weeklyLate = useMemo(
-        () => weekRows.reduce((s, r) => s + safeNum(r["지각"]), 0),
-        [weekRows]
-    );
-    const weeklyOvertime = useMemo(
-        () => weekRows.reduce((s, r) => s + safeNum(r["오버타임"]), 0),
-        [weekRows]
-    );
+    // 주간 지각: 기존 로직 유지 (시트에 주간 지각 컬럼 없음)
     const weeklyLatePersons = useMemo(
         () => getPerPersonStats(weekRows, "지각"),
         [weekRows]
     );
-    const weeklyOvertimePersons = useMemo(
-        () => getPerPersonStats(weekRows, "오버타임"),
-        [weekRows]
-    );
+
+    // 주간 오버타임: Member_Stats 연동
+    const weeklyOvertimePersons = useMemo(() => {
+        if (stats.length === 0) return [];
+        return stats
+            .map(s => ({ name: s.이름, total: s["주간 오버타임"] }))
+            .filter(p => p.total && p.total !== "0분" && p.total !== "0")
+            .sort((a, b) => safeNum(String(b.total)) - safeNum(String(a.total))); // 숫자 기준 정렬 시도 (문자열이면 부정확할 수 있음)
+    }, [stats]);
+
+    // 주간 총 근무시간: Member_Stats 연동
+    const weeklyTotalWorkPersons = useMemo(() => {
+        if (stats.length === 0) return [];
+        return stats
+            .map(s => ({ name: s.이름, total: s["주간 총 근무"] }))
+            .filter(p => p.total && p.total !== "0분" && p.total !== "0시간 0분");
+    }, [stats]);
 
     // ── 월간 통계 ────────────────────────────────────────
-    const monthlyLate = useMemo(
-        () => monthRows.reduce((s, r) => s + safeNum(r["지각"]), 0),
-        [monthRows]
-    );
-    const monthlyOvertime = useMemo(
-        () => monthRows.reduce((s, r) => s + safeNum(r["오버타임"]), 0),
-        [monthRows]
-    );
-    const monthlyTotalShifts = monthRows.length;
-    const monthlyUniqueWorkers = useMemo(
-        () => new Set(monthRows.map((r) => r.이름)).size,
-        [monthRows]
-    );
-    const monthlyLatePersons = useMemo(
-        () => getPerPersonStats(monthRows, "지각"),
-        [monthRows]
-    );
-    const monthlyOvertimePersons = useMemo(
-        () => getPerPersonStats(monthRows, "오버타임"),
-        [monthRows]
-    );
-    const weeklyTotalWorkPersons = useMemo(
-        () => getPerPersonStats(weekRows, "총근무"),
-        [weekRows]
-    );
+    const monthRowsCount = monthRows.length; // renamed to avoid conflict if needed, used in text
 
+    // 월간 지각: Member_Stats 연동
+    const monthlyLatePersons = useMemo(() => {
+        if (stats.length === 0) return [];
+        return stats
+            .map(s => ({ name: s.이름, total: s["월간 지각"] }))
+            .filter(p => p.total && p.total !== "0분" && p.total !== "0");
+    }, [stats]);
 
+    // 월간 오버타임: Member_Stats 연동
+    const monthlyOvertimePersons = useMemo(() => {
+        if (stats.length === 0) return [];
+        return stats
+            .map(s => ({ name: s.이름, total: s["월간 오버타임"] }))
+            .filter(p => p.total && p.total !== "0분" && p.total !== "0");
+    }, [stats]);
+
+    // 월간 총 근무: Member_Stats 연동 (신규)
+    const monthlyTotalWorkPersons = useMemo(() => {
+        if (stats.length === 0) return [];
+        return stats
+            .map(s => ({ name: s.이름, total: s["월간 총 근무"] }))
+            .filter(p => p.total && p.total !== "0분" && p.total !== "0시간 0분");
+    }, [stats]);
 
 
     // ── 데이터 업데이트 (파트/대관) ────────────────────────
@@ -629,7 +650,7 @@ export default function DashboardPage() {
 
                             {/* 통계 카드 */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-px border border-zinc-800">
-                                {/* 주간 지각 — 사람별 */}
+                                {/* 주간 지각 — 사람별 (기존 로직) */}
                                 <DetailStatCard
                                     icon={AlertTriangle}
                                     label="주간 지각"
@@ -637,7 +658,7 @@ export default function DashboardPage() {
                                     accentClass="text-rose-400"
                                 />
 
-                                {/* 주간 오버타임 — 사람별 */}
+                                {/* 주간 오버타임 — 사람별 (Member_Stats) */}
                                 <DetailStatCard
                                     icon={Clock}
                                     label="주간 오버타임"
@@ -647,16 +668,12 @@ export default function DashboardPage() {
                             </div>
 
                             <div className="grid grid-cols-1 border border-zinc-800 border-t-0">
+                                {/* 주간 총 근무시간 — 사람별 (Member_Stats) */}
                                 <DetailStatCard
                                     icon={Clock}
                                     label="주간 총 근무시간"
                                     persons={weeklyTotalWorkPersons}
                                     accentClass="text-indigo-400"
-                                    formatter={(val) => {
-                                        const h = Math.floor(val / 60);
-                                        const m = val % 60;
-                                        return m > 0 ? `${h}시간 ${m}분` : `${h}시간`;
-                                    }}
                                 />
                             </div>
 
@@ -710,7 +727,7 @@ export default function DashboardPage() {
                                 {today.getFullYear()}년 {today.getMonth() + 1}월
                             </p>
 
-                            {/* 통계 카드 (간소화됨) */}
+                            {/* 통계 카드 (Member_Stats) */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-px border border-zinc-800">
                                 <DetailStatCard
                                     icon={AlertTriangle}
@@ -724,6 +741,15 @@ export default function DashboardPage() {
                                     label="누적 오버타임"
                                     persons={monthlyOvertimePersons}
                                     accentClass="text-emerald-400"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 border border-zinc-800 border-t-0">
+                                <DetailStatCard
+                                    icon={Clock}
+                                    label="누적 총 근무시간"
+                                    persons={monthlyTotalWorkPersons}
+                                    accentClass="text-indigo-400"
                                 />
                             </div>
                         </motion.div>

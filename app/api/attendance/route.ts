@@ -39,36 +39,59 @@ async function getSheet() {
   return sheet;
 }
 
+
+// ── Member_Stats 시트 데이터 가져오기 ────────────────────
+async function getMemberStats(doc: GoogleSpreadsheet) {
+  const sheet = doc.sheetsByTitle["Member_Stats"];
+  if (!sheet) return [];
+
+  const rows = await sheet.getRows();
+  return rows.map((row) => {
+    const obj: Record<string, string> = {};
+    for (const header of sheet.headerValues) {
+      obj[header] = row.get(header);
+    }
+    return obj;
+  });
+}
+
 // ── GET: 전체 데이터 조회 (날짜별 정렬, rowNumber 포함) ───
 export async function GET() {
   try {
-    const sheet = await getSheet();
-    const rows = await sheet.getRows();
+    const { serviceAccountAuth, sheetId } = getAuth();
+    const doc = new GoogleSpreadsheet(sheetId, serviceAccountAuth);
+    await doc.loadInfo();
+
+    const sheet = doc.sheetsByTitle["Attendance_Logs"];
+    if (!sheet) {
+      throw new Error(
+        'Sheet tab "Attendance_Logs" not found. Please create it in your spreadsheet.'
+      );
+    }
+
+    // 병렬로 데이터 가져오기
+    const [rows, stats] = await Promise.all([
+      sheet.getRows(),
+      getMemberStats(doc),
+    ]);
 
     const data = rows.map((row) => {
       const obj: Record<string, string | number> = {};
       for (const header of sheet.headerValues) {
-        obj[header] = row.get(header) ?? "";
+        obj[header] = row.get(header);
       }
-      // 시트 내 행 번호 (수정/삭제에 사용)
-      obj._rowNumber = row.rowNumber;
+      obj["_rowNumber"] = row.rowNumber;
       return obj;
     });
 
-    // 날짜별 정렬 (최신 날짜가 먼저)
-    const dateKey = sheet.headerValues.find(
-      (h) => h === "날짜" || h.toLowerCase() === "date"
-    );
+    // 날짜 내림차순 정렬 (최신순)
+    data.sort((a, b) => {
+      const dateA = new Date(a["날짜"] as string).getTime();
+      const dateB = new Date(b["날짜"] as string).getTime();
+      return dateB - dateA;
+    });
 
-    if (dateKey) {
-      data.sort(
-        (a, b) =>
-          new Date(String(b[dateKey])).getTime() -
-          new Date(String(a[dateKey])).getTime()
-      );
-    }
-
-    return NextResponse.json({ success: true, data }, { status: 200 });
+    return NextResponse.json({ success: true, data, stats });
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Unknown error occurred";
