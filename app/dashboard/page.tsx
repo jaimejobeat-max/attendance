@@ -10,6 +10,8 @@ import {
     Users,
     TrendingUp,
     ArrowLeft,
+    ChevronLeft,
+    ChevronRight,
     Loader2,
 } from "lucide-react";
 import Link from "next/link";
@@ -26,6 +28,9 @@ interface AttendanceRow {
     "지각": string;
     "오버타임": string;
     "총근무": string;
+    "지각_분"?: string;
+    "오버타임_분"?: string;
+    "총근무_분"?: string;
     비고: string;
     _rowNumber?: number;
 }
@@ -33,10 +38,10 @@ interface AttendanceRow {
 type TabType = "weekly" | "monthly";
 
 // ── 유틸리티 ───────────────────────────────────────────────
-function getWeekRange(today: Date): [Date, Date] {
+function getWeekRange(today: Date, offset = 0): [Date, Date] {
     const day = today.getDay();
     const monday = new Date(today);
-    monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
+    monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1) + offset * 7);
     monday.setHours(0, 0, 0, 0);
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
@@ -44,11 +49,11 @@ function getWeekRange(today: Date): [Date, Date] {
     return [monday, sunday];
 }
 
-function getMonthRange(today: Date): [Date, Date] {
-    const first = new Date(today.getFullYear(), today.getMonth(), 1);
+function getMonthRange(today: Date, offset = 0): [Date, Date] {
+    const first = new Date(today.getFullYear(), today.getMonth() + offset, 1);
     const last = new Date(
         today.getFullYear(),
-        today.getMonth() + 1,
+        today.getMonth() + offset + 1,
         0,
         23,
         59,
@@ -59,11 +64,16 @@ function getMonthRange(today: Date): [Date, Date] {
 }
 
 function parseDate(dateStr: string): Date {
-    return new Date(dateStr);
+    // "YYYY-MM-DD" 형식을 UTC가 아닌 로컬 시간으로 파싱
+    const [year, month, day] = dateStr.split("-").map(Number);
+    return new Date(year, month - 1, day);
 }
 
 function formatDate(d: Date): string {
-    return d.toISOString().split("T")[0];
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
 }
 
 function formatDateKR(dateStr: string): string {
@@ -161,6 +171,37 @@ function parseDuration(val: string | number): number {
 
     // Just number assumed as minutes
     return parseInt(str.replace(/[^0-9]/g, "")) || 0;
+}
+
+// ── 분 → "X시간 Y분" 포맷 ──────────────────────────────────
+function formatDuration(minutes: number): string {
+    if (minutes <= 0) return "0분";
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    if (h === 0) return `${m}분`;
+    if (m === 0) return `${h}시간`;
+    return `${h}시간 ${m}분`;
+}
+
+// ── 행 배열에서 사람별 통계 추출 ─────────────────────────────
+function computePersonStats(
+    rows: AttendanceRow[],
+    field: "지각" | "오버타임" | "총근무"
+): PersonStat[] {
+    const fallbackField = (field + "_분") as "지각_분" | "오버타임_분" | "총근무_분";
+    const map = new Map<string, number>();
+    for (const row of rows) {
+        const name = row.이름;
+        if (!name) continue;
+        // 텍스트 필드가 비어있으면 _분 숫자 필드를 fallback으로 사용
+        const primaryVal = parseDuration(row[field]);
+        const fallbackVal = parseDuration(row[fallbackField] ?? "");
+        const val = primaryVal > 0 ? primaryVal : fallbackVal;
+        if (val > 0) map.set(name, (map.get(name) || 0) + val);
+    }
+    return Array.from(map.entries())
+        .map(([name, totalMin]) => ({ name, total: formatDuration(totalMin) }))
+        .sort((a, b) => parseDuration(b.total as string) - parseDuration(a.total as string));
 }
 
 // ── 근무자 테이블 컴포넌트 ─────────────────────────────────
@@ -507,11 +548,13 @@ export default function DashboardPage() {
     const [stats, setStats] = useState<MemberStatRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<TabType>("weekly");
+    const [weekOffset, setWeekOffset] = useState(0);
+    const [monthOffset, setMonthOffset] = useState(0);
 
     const today = useMemo(() => new Date(), []);
     const todayStr = formatDate(today);
-    const [weekStart, weekEnd] = useMemo(() => getWeekRange(today), [today]);
-    const [monthStart, monthEnd] = useMemo(() => getMonthRange(today), [today]);
+    const [weekStart, weekEnd] = useMemo(() => getWeekRange(today, weekOffset), [today, weekOffset]);
+    const [monthStart, monthEnd] = useMemo(() => getMonthRange(today, monthOffset), [today, monthOffset]);
 
     useEffect(() => {
         fetch("/api/attendance")
@@ -550,63 +593,34 @@ export default function DashboardPage() {
         [data, monthStart, monthEnd]
     );
 
-    // ── 주간 통계 (사람별) ────────────────────────────────
-    // 주간 지각: Member_Stats 연동
-    const weeklyLatePersons = useMemo(() => {
-        if (stats.length === 0) return [];
-        return stats
-            .map(s => ({ name: s.이름, total: s["주간 지각"] }))
-            .filter(p => p.total && p.total !== "0분" && p.total !== "0")
-            .sort((a, b) => parseDuration(b.total) - parseDuration(a.total));
-    }, [stats]);
+    // ── 주간 통계 (weekRows 직접 계산 → 주간 이동 반영) ─────────
+    const weeklyLatePersons = useMemo(
+        () => computePersonStats(weekRows, "지각"),
+        [weekRows]
+    );
+    const weeklyOvertimePersons = useMemo(
+        () => computePersonStats(weekRows, "오버타임"),
+        [weekRows]
+    );
+    const weeklyTotalWorkPersons = useMemo(
+        () => computePersonStats(weekRows, "총근무"),
+        [weekRows]
+    );
 
-    // 주간 오버타임: Member_Stats 연동
-    const weeklyOvertimePersons = useMemo(() => {
-        if (stats.length === 0) return [];
-        return stats
-            .map(s => ({ name: s.이름, total: s["주간 오버타임"] }))
-            .filter(p => p.total && p.total !== "0분" && p.total !== "0")
-            .sort((a, b) => parseDuration(b.total) - parseDuration(a.total));
-    }, [stats]);
-
-    // 주간 총 근무시간: Member_Stats 연동
-    const weeklyTotalWorkPersons = useMemo(() => {
-        if (stats.length === 0) return [];
-        return stats
-            .map(s => ({ name: s.이름, total: s["주간 총 근무"] }))
-            .filter(p => p.total && p.total !== "0분" && p.total !== "0시간 0분")
-            .sort((a, b) => parseDuration(b.total) - parseDuration(a.total));
-    }, [stats]);
-
-    // ── 월간 통계 ────────────────────────────────────────
-    const monthRowsCount = monthRows.length; // renamed to avoid conflict if needed, used in text
-
-    // 월간 지각: Member_Stats 연동
-    const monthlyLatePersons = useMemo(() => {
-        if (stats.length === 0) return [];
-        return stats
-            .map(s => ({ name: s.이름, total: s["월간 지각"] }))
-            .filter(p => p.total && p.total !== "0분" && p.total !== "0")
-            .sort((a, b) => parseDuration(b.total) - parseDuration(a.total));
-    }, [stats]);
-
-    // 월간 오버타임: Member_Stats 연동
-    const monthlyOvertimePersons = useMemo(() => {
-        if (stats.length === 0) return [];
-        return stats
-            .map(s => ({ name: s.이름, total: s["월간 오버타임"] }))
-            .filter(p => p.total && p.total !== "0분" && p.total !== "0")
-            .sort((a, b) => parseDuration(b.total) - parseDuration(a.total));
-    }, [stats]);
-
-    // 월간 총 근무: Member_Stats 연동 (신규)
-    const monthlyTotalWorkPersons = useMemo(() => {
-        if (stats.length === 0) return [];
-        return stats
-            .map(s => ({ name: s.이름, total: s["월간 총 근무"] }))
-            .filter(p => p.total && p.total !== "0분" && p.total !== "0시간 0분")
-            .sort((a, b) => parseDuration(b.total) - parseDuration(a.total));
-    }, [stats]);
+    // ── 월간 통계 (monthRows 직접 계산 → 월간 이동 반영) ────────
+    const monthRowsCount = monthRows.length;
+    const monthlyLatePersons = useMemo(
+        () => computePersonStats(monthRows, "지각"),
+        [monthRows]
+    );
+    const monthlyOvertimePersons = useMemo(
+        () => computePersonStats(monthRows, "오버타임"),
+        [monthRows]
+    );
+    const monthlyTotalWorkPersons = useMemo(
+        () => computePersonStats(monthRows, "총근무"),
+        [monthRows]
+    );
 
 
     // ── 데이터 업데이트 (파트/대관) ────────────────────────
@@ -706,10 +720,35 @@ export default function DashboardPage() {
                             transition={{ duration: 0.2 }}
                             className="space-y-6"
                         >
-                            {/* 기간 */}
-                            <p className="text-[11px] text-zinc-600 tracking-wide">
-                                {formatDate(weekStart)} — {formatDate(weekEnd)}
-                            </p>
+                            {/* 기간 + 이동 화살표 */}
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => setWeekOffset((o) => o - 1)}
+                                    className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
+                                    aria-label="이전 주"
+                                >
+                                    <ChevronLeft size={14} />
+                                </button>
+                                <p className="text-[11px] text-zinc-500 tracking-wide">
+                                    {formatDate(weekStart)} — {formatDate(weekEnd)}
+                                    {weekOffset === 0 && <span className="ml-1.5 text-indigo-400">이번 주</span>}
+                                </p>
+                                <button
+                                    onClick={() => setWeekOffset((o) => o + 1)}
+                                    className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
+                                    aria-label="다음 주"
+                                >
+                                    <ChevronRight size={14} />
+                                </button>
+                                {weekOffset !== 0 && (
+                                    <button
+                                        onClick={() => setWeekOffset(0)}
+                                        className="text-[10px] text-zinc-600 hover:text-zinc-300 transition ml-1"
+                                    >
+                                        오늘로
+                                    </button>
+                                )}
+                            </div>
 
                             {/* 통계 카드 */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-px border border-zinc-800">
@@ -755,10 +794,35 @@ export default function DashboardPage() {
                             transition={{ duration: 0.2 }}
                             className="space-y-6"
                         >
-                            {/* 기간 */}
-                            <p className="text-[11px] text-zinc-600 tracking-wide">
-                                {today.getFullYear()}년 {today.getMonth() + 1}월
-                            </p>
+                            {/* 기간 + 이동 화살표 */}
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => setMonthOffset((o) => o - 1)}
+                                    className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
+                                    aria-label="이전 달"
+                                >
+                                    <ChevronLeft size={14} />
+                                </button>
+                                <p className="text-[11px] text-zinc-500 tracking-wide">
+                                    {monthStart.getFullYear()}년 {monthStart.getMonth() + 1}월
+                                    {monthOffset === 0 && <span className="ml-1.5 text-indigo-400">이번 달</span>}
+                                </p>
+                                <button
+                                    onClick={() => setMonthOffset((o) => o + 1)}
+                                    className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
+                                    aria-label="다음 달"
+                                >
+                                    <ChevronRight size={14} />
+                                </button>
+                                {monthOffset !== 0 && (
+                                    <button
+                                        onClick={() => setMonthOffset(0)}
+                                        className="text-[10px] text-zinc-600 hover:text-zinc-300 transition ml-1"
+                                    >
+                                        이번 달로
+                                    </button>
+                                )}
+                            </div>
 
                             {/* 통계 카드 (Member_Stats) */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-px border border-zinc-800">
